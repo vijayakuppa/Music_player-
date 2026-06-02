@@ -157,4 +157,5 @@ This project is developed for educational and learning purposes.
 
 ## 👨‍💻 Author
 Kuppa Vijaya Sankari
+
 Developed as a Data Structures and C Programming project demonstrating the implementation of a Music Playlist Manager using Circular Doubly Linked Lists.
