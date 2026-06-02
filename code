@@ -1,0 +1,176 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <windows.h>
+#include <mmsystem.h>
+
+#define PATH_LEN 1024
+
+typedef struct Node {
+    char path[PATH_LEN];
+    struct Node *prev, *next;
+} Node;
+
+Node *head = NULL;   // first song
+Node *current = NULL; // current song pointer
+
+void clear_stdin() { int c; while ((c = getchar()) != '\n' && c != EOF) {} }
+
+Node* create_node(const char *path) {
+    Node *n = (Node*)malloc(sizeof(Node));
+    if (!n) { printf("Memory error!\n"); exit(1); }
+    strncpy(n->path, path, PATH_LEN - 1);
+    n->path[PATH_LEN - 1] = '\0';
+    n->next = n->prev = n;
+    return n;
+}
+
+void add_song() {
+    char buf[PATH_LEN];
+    printf("Enter song filename or path: ");
+    if (!fgets(buf, sizeof(buf), stdin)) return;
+    size_t ln = strlen(buf);
+    if (ln && buf[ln-1] == '\n') buf[ln-1] = '\0';
+    if (strlen(buf) == 0) { printf("No input.\n"); return; }
+
+    Node *n = create_node(buf);
+
+    if (!head) {
+        head = n;
+        current = n;
+    } else {
+        Node *tail = head->prev;
+        tail->next = n;
+        n->prev = tail;
+        n->next = head;
+        head->prev = n;
+    }
+    printf("Added: %s\n", n->path);
+}
+
+void delete_song() {
+    if (!head) { printf("Playlist empty.\n"); return; }
+
+    printf("Enter song filename to delete: ");
+    char buf[PATH_LEN];
+    if (!fgets(buf, sizeof(buf), stdin)) return;
+    size_t ln = strlen(buf);
+    if (ln && buf[ln-1] == '\n') buf[ln-1] = '\0';
+
+    Node *temp = head;
+    do {
+        if (strcmp(temp->path, buf) == 0) {
+            if (temp->next == temp) { // only one node
+                if (current == temp) {
+                    mciSendString("stop myMusic", NULL, 0, NULL);
+                    mciSendString("close myMusic", NULL, 0, NULL);
+                }
+                free(temp);
+                head = current = NULL;
+            } else {
+                if (current == temp) {
+                    mciSendString("stop myMusic", NULL, 0, NULL);
+                    mciSendString("close myMusic", NULL, 0, NULL);
+                    current = temp->next;
+                }
+                temp->prev->next = temp->next;
+                temp->next->prev = temp->prev;
+                if (temp == head) head = temp->next;
+                free(temp);
+            }
+            printf("Deleted: %s\n", buf);
+            return;
+        }
+        temp = temp->next;
+    } while (temp != head);
+
+    printf("Song not found.\n");
+}
+
+void display_songs() {
+    if (!head) { printf("Playlist empty.\n"); return; }
+    Node *temp = head;
+    printf("Playlist:\n");
+    do {
+        if (temp == current) printf(" -> %s (CURRENT)\n", temp->path);
+        else printf("    %s\n", temp->path);
+        temp = temp->next;
+    } while (temp != head);
+}
+
+void open_current() {
+    if (!current) { printf("No song to open.\n"); return; }
+    char cmd[2048];
+    mciSendString("stop myMusic", NULL, 0, NULL);
+    mciSendString("close myMusic", NULL, 0, NULL);
+
+    snprintf(cmd, sizeof(cmd), "open \"%s\" alias myMusic", current->path);
+    if (mciSendString(cmd, NULL, 0, NULL) != 0) {
+        printf("Failed to open: %s\n", current->path);
+    }
+}
+
+void play_current() {
+    if (!current) { printf("No song to play.\n"); return; }
+    open_current();
+    if (mciSendString("play myMusic", NULL, 0, NULL) == 0) {
+        printf("Playing: %s\n", current->path);
+    } else {
+        printf("Failed to play: %s\n", current->path);
+    }
+}
+
+void pause_current() {
+    if (mciSendString("pause myMusic", NULL, 0, NULL) == 0) printf("Paused.\n");
+    else printf("Pause failed.\n");
+}
+
+void resume_current() {
+    if (mciSendString("resume myMusic", NULL, 0, NULL) == 0) printf("Resumed.\n");
+    else printf("Resume failed.\n");
+}
+
+void stop_current() {
+    mciSendString("stop myMusic", NULL, 0, NULL);
+    mciSendString("close myMusic", NULL, 0, NULL);
+    printf("Stopped.\n");
+}
+
+void next_song() {
+    if (!current) { printf("Playlist empty.\n"); return; }
+    current = current->next;
+    play_current();
+}
+
+void prev_song() {
+    if (!current) { printf("Playlist empty.\n"); return; }
+    current = current->prev;
+    play_current();
+}
+
+int main() {
+    printf("Circular Doubly Linked List Music Playlist\n");
+    printf("Commands:\n");
+    printf("  a - add song\n  d - delete song\n  l - list songs\n");
+    printf("  p - play current\n  s - stop\n  u - pause\n  r - resume\n");
+    printf("  n - next song\n  b - previous song\n  q - quit\n");
+
+    while (1) {
+        printf("\nEnter command: ");
+        int c = getchar();
+        clear_stdin();
+        if (c == 'a') add_song();
+        else if (c == 'd') delete_song();
+        else if (c == 'l') display_songs();
+        else if (c == 'p') play_current();
+        else if (c == 's') stop_current();
+        else if (c == 'u') pause_current();
+        else if (c == 'r') resume_current();
+        else if (c == 'n') next_song();
+        else if (c == 'b') prev_song();
+        else if (c == 'q') { stop_current(); break; }
+        else printf("Unknown command.\n");
+    }
+    return 0;
+}
+
